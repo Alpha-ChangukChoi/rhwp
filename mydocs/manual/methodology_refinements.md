@@ -195,6 +195,112 @@
 
 ---
 
+## R-010. 외부 정보 조회 단계의 명시화
+
+### 상황
+
+수행계획서 §6 의 결정사항 중 *외부 docs / API / 사용자 응답*을 조회해야 하는 항목이 있을 때.
+
+### 공백 / 문제
+
+본가 절차에 *진행 중 외부 정보 조회* 단계가 명시되지 않음. task #2 에서 R-2 (OPENAI_MODEL 기본값) 가 외부 OpenAI docs 조회 의존이었으나 자동화 차단(403)으로 진행 중단 우려가 발생. 작업지시자에게 1줄 응답 받아 fallback.
+
+### 개선안
+
+수행계획서의 결정사항 중 외부 정보 의존인 것은 다음을 명시:
+
+- **조회 대상**: 어디서 (URL / 사람 / DB)
+- **조회 시점**: 어느 단계 시작 시
+- **결정 기준**: 무엇을 보고 결정하는가
+- **fallback 경로**: 조회 실패 시 (네트워크 차단·docs 폐기 등) 어떻게 진행
+
+### 적용 시점
+
+차기 task 부터.
+
+---
+
+## R-011. 누적 환경 정합성 점검
+
+### 상황
+
+새 task 시작 시 *이전 task 의 산출물 (working tree, .env, 캐시 등)* 이 본 task 환경에 존재.
+
+### 공백 / 문제
+
+본가 절차의 "단계 0: 사전 점검" 같은 명시 단계가 없어, 이전 task 잔재가 새 task 의 자동 테스트나 빌드에서 *예상 못한 경합* 을 만들 수 있음.
+
+task #2 Stage 1 에서 #1 Stage 3 의 .env 사본이 ConfigModule 검증 e2e 와 경합 → setup-env.ts + ignoreEnvFile 분기로 해결. 사전 점검이 있었으면 빨리 발견 가능.
+
+### 개선안
+
+수행계획서 §3 (영향 범위) 또는 §6 (리스크) 에 다음 항목 명시:
+
+- **누적 환경 점검 체크리스트**:
+  - working tree 가 깨끗한가 (uncommitted 변경 없음)
+  - .env / .env.* 의 현재 값이 본 task 가정과 일치하는가
+  - node_modules / dist / docker image 캐시가 stale 하지 않은가
+  - 테스트 환경 변수가 production 과 격리되어 있는가
+
+### 적용 시점
+
+차기 task (#3) 부터 *수행계획서 표준 항목*에 포함.
+
+---
+
+## R-012. jest manual mock 의 단일 진실 원천
+
+### 상황
+
+NestJS CLI default 의 jest 설정이 *단위 테스트 (`rootDir: src`)* 와 *e2e 테스트 (`rootDir: .` = test)* 를 분리. 두 설정이 각자의 `__mocks__/` 에서 manual mock 검색.
+
+### 공백 / 문제
+
+`openai` 같은 node 모듈을 모킹할 때 *src/__mocks__/openai.ts + test/__mocks__/openai.ts* 가 dup 됨. 모킹 대상이 늘어날수록 dup 가 누적, 한쪽 수정 누락 시 양쪽 일관성 깨짐.
+
+### 개선안
+
+다음 중 1개 도입 (별도 *테스트 인프라 정리 task* 후보):
+
+- 옵션 A: 단일 jest config 의 `roots` 를 양쪽 디렉터리로 설정 + testRegex 분기로 단위/e2e 격리
+- 옵션 B: 단위 테스트도 test/ 디렉터리로 이동, src/ 는 production code 만
+- 옵션 C: mock 본체를 별도 helper(`test/mocks/`) 두고 양 `__mocks__/<module>.ts` 가 re-export
+
+### 적용 시점
+
+본 task #2 에서 dup 발생 시점에 정식화. 차기 *테스트 인프라 정리 task* (별도 이슈) 에서 옵션 채택 후 적용.
+
+---
+
+## R-013. 2단계 검증 사다리 (jest + 컨테이너)
+
+### 상황
+
+backend 작업의 동일 동작 (예: ConfigModule 의 환경변수 검증) 을 jest 단위/e2e 환경과 docker 컨테이너 환경에서 *모두* 검증할 때.
+
+### 공백 / 문제
+
+대부분의 경우 두 환경 중 하나만 검증 → 다른 환경의 정합성은 추론에 의존. 환경 차이 (NODE_ENV, .env 처리, 의존성 hoisting 등) 로 인한 *production-only* deviation 발생 가능.
+
+task #2 의 Stage 1 (jest e2e) + Stage 3 (compose 부팅) 에서 동일 ConfigModule 검증을 두 layer 에서 각각 검증 → *jest 의 가짜 환경에서 통과한 검증이 실제 컨테이너에서도 동일 동작*임을 입증.
+
+### 개선안
+
+backend 작업의 종료 체크에 다음 *2단계 검증 사다리*를 권장:
+
+| 단계 | 환경 | 목적 |
+|------|------|------|
+| **1** | jest 단위/e2e | 빠른 회귀 검증, 모킹·격리 활용 |
+| **2** | docker compose | production 환경 정합성 (NODE_ENV, .env, 의존성 hoisting) |
+
+자동 명령으로 표현되면 R-008 (자동 테스트 우선)과 자연스럽게 결합.
+
+### 적용 시점
+
+차기 backend task (#3 등) 부터 *수행계획서 §2 종료 조건* 에 명시 권장.
+
+---
+
 ## 향후 추가 예정 (자리)
 
 - R-003. 단계별 보고서(`_stage{N}.md`) 의 평가 메모 표준화
