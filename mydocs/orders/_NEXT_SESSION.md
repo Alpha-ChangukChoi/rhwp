@@ -21,24 +21,29 @@
 
 [**#5 rhwp-studio 우측 사이드바 채팅 UI**](https://github.com/Alpha-ChangukChoi/rhwp/issues/5) — *미등록*. R-001 미니사이클로 이슈 본문 + R-014 점검표 작성 → 작업지시자 승인 후 등록.
 
-### ⚠️ #5 진입 시 사전 결정 필요
+### #5 정책 충돌 결정 (완료, 2026-04-30)
 
-#5 는 **rhwp-studio (frontend) 수정이 필수**인 첫 task. 본 fork 의 *본가 코드 무수정 정책* 과 충돌:
+**채택안: 옵션 2의 변형** — `rhwp-studio/src/agent/` 신규 폴더 + `src/main.ts` 진입점 1~2줄 추가.
 
-- 현재 정책: `rhwp-studio/` 수정 금지
-- #5 요구: 사이드바 채팅 UI 컴포넌트를 rhwp-studio 에 추가
+| 항목 | 내용 |
+|------|------|
+| 형식 | 본가 폴더 *내부*에 신규 sub-module 폴더 추가 (`src/agent/`) + 진입점 import 1~2줄 |
+| 본가 동기화 충돌 표면 | `src/main.ts` 의 1~2줄만 — 충돌 시 즉시 인지·해결 가능 |
+| 통합도 | rhwp-studio 의 `src/hwpctl/`, `src/command/`, `src/view/` 등 *상대 경로 import* 직접 접근 |
+| R-013 layer 2 재정의 | `rhwp-studio/e2e/` 의 puppeteer + Vite preview 패턴 그대로 활용 |
+| 무수정 정책 정신 | *기존 동작 변경 없음 + 추가 모듈 격리* → 본가 회귀 0, 동기화 안전 |
 
-**가능한 선택지** (수행계획서 §6 결정사항으로 다룰 후보):
-1. **정책 완화** — `rhwp-studio/` 의 *agent-v0.1 마일스톤 작업*에 한해 수정 허용. 다른 본가 폴더 (`src/`, `rhwp-shared/` 등) 는 수정 금지 유지.
-2. **별도 패키지 분리** — `rhwp-studio-agent-ui/` (또는 `rhwp-studio/agent/`) 신규 패키지 + rhwp-studio 의 진입점 1줄만 수정.
-3. **iframe 임베딩** — rhwp-studio 무수정 + 별도 페이지를 iframe 으로 띄움 (가장 격리, 통합도 ↓).
+대안 검토 결과 (R-015 반대 입장 근거):
+- **옵션 1** (산발 수정): 본가 동기화 충돌 위험 분포 예측 불가 → 비채택
+- **옵션 2 원안** (sibling 패키지 `rhwp-studio-agent-ui/`): cross-package 공개 API 정의 부담이 #5 범위 외 → 비채택
+- **옵션 3** (iframe): 통합도 손상이 #5 핵심 가치 손상 → 비채택
 
-수행계획서 작성 시 §6 의 *반대 입장 근거 포함* (R-015) 형식으로 3개 안을 비교한 뒤 작업지시자 승인.
+#5 수행계획서 §6 에는 *위 결정 경위*를 그대로 인용 + 본 task 의 추가 결정사항 (컴포넌트 라이브러리 / 상태 관리 / 도구 호출 결과 시각화 형태 / sessionId 발급 시점 / 채팅 입력 → 백엔드 호출 방식 등) 만 신규 명시.
 
 ### 진입 절차 (본가 [CLAUDE.md](../../CLAUDE.md) + fork [methodology_refinements.md](../manual/methodology_refinements.md) 결합)
 
 ```
-0. (#5 사전) 정책 충돌 옵션 1/2/3 중 하나 작업지시자 승인 — 위 ⚠️ 참조
+0. (#5 사전) 정책 충돌 결정 완료 — 옵션 2의 변형 (rhwp-studio/src/agent/) 채택. 위 섹션 참조
 
 1. R-011: 누적 환경 정합성 점검
    - cd /Users/a111-04-2402-01/Desktop/open-source/rhwp-fork
@@ -98,7 +103,7 @@ cd rhwp-agent-server && npm test && npm run test:e2e
 - `rhwp-studio/`, `rhwp-chrome/`, `rhwp-firefox/`, `rhwp-safari/`, `rhwp-vscode/`, `rhwp-shared/`
 - 본가의 다른 npm/, web/, examples/, tests/, mydocs/ (단 `mydocs/manual/methodology_refinements.md` 는 fork 전용 추가 문서)
 
-**⚠️ #5 진입 시 정책 재검토 필수** — 위 *다음 작업* 섹션의 옵션 1/2/3 참조.
+**#5 정책 결정 완료** — 옵션 2의 변형 (`rhwp-studio/src/agent/` 신규 폴더 + `src/main.ts` 진입점 1~2줄). 위 *다음 작업* 섹션 *#5 정책 충돌 결정* 참조. 본가 다른 폴더는 수정 금지 유지.
 
 ## 활성 다듬기 (R-007~R-015) 사전 적용 의무
 
