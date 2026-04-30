@@ -6,6 +6,8 @@ import { OpenAiError } from './chat.errors';
 import { ChatMessage } from './chat.types';
 import { ToolExecutor } from './tool-executor';
 import { TOOLS } from './tools';
+import { SessionService } from '../session/session.service';
+import { SessionId } from '../session/session.types';
 
 const MAX_ITERATIONS = 5; // R-3-C, R-009 (±2 → 3~7)
 
@@ -18,6 +20,7 @@ export class ChatService {
     @Inject(OPENAI_CLIENT) private readonly openai: OpenAI,
     config: ConfigService,
     private readonly toolExecutor: ToolExecutor,
+    private readonly sessions: SessionService,
   ) {
     this.model = config.getOrThrow<string>('OPENAI_MODEL');
   }
@@ -100,5 +103,24 @@ export class ChatService {
     throw new OpenAiError(
       `max iterations (${MAX_ITERATIONS}) exceeded after ${elapsed}ms`,
     );
+  }
+
+  // R-4-G: SessionService 위에 멀티턴 진입점
+  async completeInSession(
+    sessionId: SessionId,
+    userMessage: ChatMessage,
+  ): Promise<ChatMessage> {
+    const startedAt = Date.now();
+    this.sessions.append(sessionId, userMessage);
+    const conversation = [...this.sessions.get(sessionId).messages];
+
+    const assistantReply = await this.completeWithTools(conversation);
+    this.sessions.append(sessionId, assistantReply);
+
+    const elapsed = Date.now() - startedAt;
+    this.logger.log(
+      `completeInSession sessionId=${sessionId} historyLen=${conversation.length} elapsed=${elapsed}ms`,
+    );
+    return assistantReply;
   }
 }
