@@ -274,4 +274,13 @@ describe('ChatService', () => {
       ).rejects.toThrow(SessionExpiredError);
     });
   });
+
+  describe('createSession (R-6-G)', () => {
+    it('SessionService.create() wrapper — sessionId 발급 + 세션 등록', () => {
+      const sid = service.createSession();
+      expect(sid).toBeDefined();
+      expect(typeof sid).toBe('string');
+      expect(sessions.has(sid)).toBe(true);
+    });
+  });
 });
