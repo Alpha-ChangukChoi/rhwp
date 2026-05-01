@@ -59,11 +59,17 @@ export class ChatService {
     const startedAt = Date.now();
 
     for (let i = 0; i < MAX_ITERATIONS; i++) {
-      const response = await this.openai.chat.completions.create({
-        model: this.model,
-        messages: conversation,
-        tools: TOOLS as any,
-      });
+      let response;
+      try {
+        response = await this.openai.chat.completions.create({
+          model: this.model,
+          messages: conversation,
+          tools: TOOLS as any,
+        });
+      } catch (err) {
+        if (err instanceof OpenAiError) throw err;
+        throw new OpenAiError('openai chat completions failed', err);
+      }
 
       const choice = response.choices?.[0]?.message;
       if (!choice) throw new OpenAiError('empty choice');
