@@ -44,13 +44,16 @@
 7. Stage 진행
 8. 최종 보고서 + 커밋 분할 + 이슈 #6 클로즈 + local/devel merge → **agent-v0.1 마일스톤 100% 완성**
 
-### 또는: 환경 정비 task (#5 의 D-5-6 후속)
+### ~~환경 정비 task (#5 의 D-5-6 후속)~~ ✅ 완료 (2026-05-01)
 
-| 항목 | 작업 | 영향 |
-|------|------|------|
-| `pkg/` WASM 빌드 | `cargo build --target wasm32-unknown-unknown` 또는 `docker compose --env-file .env.docker run --rm wasm` | rhwp-studio production 빌드 활성화 + #5 의 5번째 통합 e2e (main.ts 자동 mount) skip 해제 + PWA SW 점검 (R-5-F) 활성화 |
+**`local/env-pkg-wasm` 브랜치에서 처리 완료** (Stage 3 보고서 §12 참조):
 
-이는 *방법론 외 환경 정비 작업* — 별도 GitHub issue 없이 작업지시자가 *직접 빌드* 또는 *별도 task 등록* 결정.
+- `pkg/` WASM 빌드 ✅ — Docker compose (2분 47초)
+- `.env.docker` 작성 (UID=501, GID=1000)
+- TypeScript strict 0 에러 + `npm run build` 통과 + 통합 e2e 5건 모두 실 검증
+- 1번째 e2e idempotent 검증으로 갱신 (main.ts 자동 mount + 수동 mount 양립)
+
+**남은 deferred**: PWA SW 실측 (vite preview + SW 인터셉트) — agent-v0.1 마일스톤 회고 시점 또는 #6 의 일부.
 
 ### 또는: 방법론 정식화 task
 
@@ -84,8 +87,8 @@ docker images rhwp-fork-agent-server --format '{{.Repository}}:{{.Tag}} {{.Size}
 ls rhwp-studio/node_modules >/dev/null 2>&1 && echo "studio node_modules ok" || echo "MISSING"
 ls rhwp-studio/dist >/dev/null 2>&1 && echo "studio dist ok" || echo "MISSING"
 
-# 6. pkg/ WASM (D-5-6 — #5 발견 환경 사전 상태)
-ls pkg/rhwp.js >/dev/null 2>&1 && echo "pkg/ WASM ok" || echo "MISSING (D-5-6)"
+# 6. pkg/ WASM (env-pkg-wasm 브랜치에서 보강 완료, 2026-05-01)
+ls pkg/rhwp.js >/dev/null 2>&1 && echo "pkg/ WASM ok" || echo "MISSING — docker compose --env-file .env.docker run --rm wasm"
 
 # 7. 자동 회귀 (선택, ~1분)
 cd rhwp-agent-server && npm test && npm run test:e2e && cd ..
@@ -119,7 +122,7 @@ cd rhwp-studio && node e2e/agent-component.test.mjs && node e2e/agent-integratio
 - R-008 자동 검증 우선
 - R-009 수치형 + 허용 오차
 - R-010 외부 정보 조회 + fallback
-- R-011 누적 환경 정합성 점검 — D-5-6 (#5) 후속 보강 사항 (pkg/ WASM)
+- R-011 누적 환경 정합성 점검 — D-5-6 보강 완료 (`local/env-pkg-wasm`, 2026-05-01)
 - R-013 2단계 검증 사다리 — **frontend 변형 첫 사례 #5** (puppeteer 단일 + mount 범위), R-016 정식화 후보
 - R-014 이슈 등록 시 다듬기 점검표 (의무, #4부터)
 - R-015 수행계획서 §6 결정사항에 반대 입장 근거 명시 (의무, #4부터)

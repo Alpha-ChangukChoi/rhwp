@@ -157,27 +157,25 @@ const browser = await getBrowser();
 
 try {
   // ─── 통합 1: 사이드바 기본 닫힘 + body 직속 mount (R-5-H, 본가 무수정 정책 검증) ──────
+  // 주의: main.ts 가 mountAgentSidebar() 자동 호출 → setupIntegration 진입 시 이미 mount 상태 가능.
+  //       mountSidebar(page) 수동 호출은 idempotent (mounted 가드) — 두 번째 호출은 silent skip.
+  //       검증 기준: *최종 상태* (1개 메뉴 항목 + body 직속 + 닫힘) 으로 통일.
   await runTest('통합: mountAgentSidebar() → 사이드바 body 직속 mount + 기본 닫힘', async () => {
     const page = await setupIntegration(browser);
-    // 기존 #studio-root 핵심 영역 보존 검증 (mount 전)
-    const beforeMenu = await page.$$eval(
-      '[data-menu="view"] .menu-dropdown > .md-item',
-      (els) => els.length,
-    );
-    await mountSidebar(page);
+    await mountSidebar(page);   // idempotent — main.ts 자동 mount 후라도 안전
     // 사이드바: body 직속 + 닫힘 상태
     const open = await page.$eval('#agent-sidebar', (el) => el.dataset.open);
     if (open !== 'false') throw new Error(`expected closed, got ${open}`);
     const parentTag = await page.$eval('#agent-sidebar', (el) =>
       el.parentElement.tagName);
     if (parentTag !== 'BODY') throw new Error(`parent: ${parentTag}, expected BODY`);
-    // 기존 메뉴 항목 보존 + 1개 추가 (agent-menu-item)
-    const afterMenu = await page.$$eval(
-      '[data-menu="view"] .menu-dropdown > .md-item',
+    // 메뉴 hook: 정확히 1개의 .agent-menu-item 추가됨 (idempotent 검증)
+    const agentItemCount = await page.$$eval(
+      '[data-menu="view"] .agent-menu-item',
       (els) => els.length,
     );
-    if (afterMenu !== beforeMenu + 1)
-      throw new Error(`menu items: ${beforeMenu} → ${afterMenu}, expected +1`);
+    if (agentItemCount !== 1)
+      throw new Error(`agent-menu-item count: ${agentItemCount}, expected 1 (idempotent)`);
     // 기존 #scroll-container 핵심 영역 정상 존재 (rhwp-studio 메인 동작 보존)
     const scrollExists = await page.$('#scroll-container');
     if (!scrollExists) throw new Error('#scroll-container missing');
