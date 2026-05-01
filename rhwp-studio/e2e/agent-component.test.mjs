@@ -76,12 +76,29 @@ async function getBrowser() {
   });
 }
 
-const MOUNT_HTML = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>
+const MOUNT_HTML = `<!DOCTYPE html><html><head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="/src/agent/agent.css">
+</head><body>
 <script type="module">
   try {
-    const { AgentClient } = await import('/src/agent/agent-client.ts');
-    const { AgentStore } = await import('/src/agent/agent-store.ts');
-    window.__agent = { AgentClient, AgentStore };
+    const [client, store, sidebarMod, inputMod, listMod, toolMod] = await Promise.all([
+      import('/src/agent/agent-client.ts'),
+      import('/src/agent/agent-store.ts'),
+      import('/src/agent/components/sidebar.ts'),
+      import('/src/agent/components/chat-input.ts'),
+      import('/src/agent/components/message-list.ts'),
+      import('/src/agent/components/tool-result-card.ts'),
+    ]);
+    window.__agent = {
+      AgentClient: client.AgentClient,
+      AgentStore: store.AgentStore,
+      AgentSidebar: sidebarMod.AgentSidebar,
+      ChatInput: inputMod.ChatInput,
+      CHAT_INPUT_MAX_LENGTH: inputMod.CHAT_INPUT_MAX_LENGTH,
+      MessageList: listMod.MessageList,
+      ToolResultCard: toolMod.ToolResultCard,
+    };
   } catch (e) {
     window.__agentError = String(e?.stack ?? e);
   }
@@ -331,6 +348,177 @@ try {
     if (!isAbort)
       throw new Error(`unexpected error: name=${result.name} msg=${result.message}`);
     console.log(`    aborted: ${result.name ?? '(no name)'}`);
+    await page.close();
+  });
+
+  // ─── 테스트 6: AgentSidebar 기본 닫힘 + R-009 너비 ────────────
+  await runTest('AgentSidebar — 기본 닫힘 (R-5-H) + 너비 360±60px (R-009)', async () => {
+    const page = await setupPage(browser);
+    await page.evaluate(() => {
+      const c = new (window).__agent.AgentClient({
+        baseUrl: 'http://localhost:3000',
+      });
+      const s = new (window).__agent.AgentStore(c);
+      const sb = new (window).__agent.AgentSidebar(s);
+      sb.mount();
+    });
+    const open = await page.$eval('#agent-sidebar', (el) => el.dataset.open);
+    if (open !== 'false') throw new Error(`expected closed, got ${open}`);
+    const width = await page.$eval('#agent-sidebar', (el) =>
+      parseFloat(getComputedStyle(el).width));
+    if (width < 300 || width > 420)
+      throw new Error(`width ${width}px outside 360±60 (R-009)`);
+    console.log(`    width: ${width}px (R-009 360±60)`);
+    await page.close();
+  });
+
+  // ─── 테스트 7: AgentSidebar.toggle() ────────────
+  await runTest('AgentSidebar.toggle() — 열림/닫힘 전환', async () => {
+    const page = await setupPage(browser);
+    await page.evaluate(() => {
+      const c = new (window).__agent.AgentClient({
+        baseUrl: 'http://localhost:3000',
+      });
+      const s = new (window).__agent.AgentStore(c);
+      const sb = new (window).__agent.AgentSidebar(s);
+      sb.mount();
+      window.__sb = sb;
+    });
+    await page.evaluate(() => (window).__sb.toggle());
+    let open = await page.$eval('#agent-sidebar', (el) => el.dataset.open);
+    if (open !== 'true') throw new Error(`after first toggle: ${open}`);
+    await page.evaluate(() => (window).__sb.toggle());
+    open = await page.$eval('#agent-sidebar', (el) => el.dataset.open);
+    if (open !== 'false') throw new Error(`after second toggle: ${open}`);
+    await page.close();
+  });
+
+  // ─── 테스트 8: ChatInput Enter / Shift+Enter ────────────
+  await runTest('ChatInput — Enter 전송 + Shift+Enter 줄바꿈', async () => {
+    const page = await setupPage(browser);
+    await page.evaluate(() => {
+      document.body.innerHTML = '';
+      window.__sent = [];
+      const ci = new (window).__agent.ChatInput(
+        (msg) => (window).__sent.push(msg),
+      );
+      ci.mount(document.body);
+    });
+    await page.focus('textarea');
+    await page.keyboard.type('hello');
+    await page.keyboard.down('Shift');
+    await page.keyboard.press('Enter');
+    await page.keyboard.up('Shift');
+    await page.keyboard.type('world');
+
+    let sent = await page.evaluate(() => (window).__sent);
+    if (sent.length !== 0)
+      throw new Error(`shift+enter sent: ${JSON.stringify(sent)}`);
+
+    await page.keyboard.press('Enter');
+    sent = await page.evaluate(() => (window).__sent);
+    if (sent.length !== 1)
+      throw new Error(`enter sent count: ${sent.length}`);
+    if (sent[0] !== 'hello\nworld')
+      throw new Error(`sent: ${JSON.stringify(sent[0])}`);
+
+    const value = await page.$eval('textarea', (el) => el.value);
+    if (value !== '') throw new Error(`after send textarea: ${value}`);
+    await page.close();
+  });
+
+  // ─── 테스트 9: ChatInput max length (R-009) ────────────
+  await runTest('ChatInput — max length 10000±2000 (R-009)', async () => {
+    const page = await setupPage(browser);
+    await page.evaluate(() => {
+      document.body.innerHTML = '';
+      const ci = new (window).__agent.ChatInput(() => {});
+      ci.mount(document.body);
+    });
+    const max = await page.$eval('textarea', (el) => el.maxLength);
+    const exported = await page.evaluate(
+      () => (window).__agent.CHAT_INPUT_MAX_LENGTH,
+    );
+    if (max !== exported)
+      throw new Error(`maxLength ${max} ≠ exported ${exported}`);
+    if (max < 8000 || max > 12000)
+      throw new Error(`maxLength ${max} outside 10000±2000 (R-009)`);
+    console.log(`    maxLength: ${max} (R-009 10000±2000)`);
+    await page.close();
+  });
+
+  // ─── 테스트 10: MessageList 사용자/AI 구분 ────────────
+  await runTest('MessageList — store change 구독 + 사용자/AI 구분 렌더링', async () => {
+    const page = await setupPage(browser);
+    await page.setRequestInterception(true);
+    page.on('request', (req) => {
+      if (handlePreflight(req)) return;
+      const url = req.url();
+      if (url.endsWith('/chat/session') && req.method() === 'POST') {
+        respondJson(req, { sessionId: 'sid-m' });
+      } else if (url.includes('/messages')) {
+        respondJson(req, { reply: { role: 'assistant', content: '안녕하세요' } });
+      } else {
+        req.continue();
+      }
+    });
+
+    await page.evaluate(async () => {
+      document.body.innerHTML = '';
+      const c = new (window).__agent.AgentClient({
+        baseUrl: 'http://localhost:3000',
+      });
+      const s = new (window).__agent.AgentStore(c);
+      const ml = new (window).__agent.MessageList(s);
+      ml.mount(document.body);
+      await s.send('hi');
+    });
+
+    const userMsgs = await page.$$eval('.agent-message--user', (els) =>
+      els.map((e) => e.textContent.trim()));
+    const aiMsgs = await page.$$eval('.agent-message--assistant', (els) =>
+      els.map((e) => e.textContent.trim()));
+
+    if (userMsgs.length !== 1 || userMsgs[0] !== 'hi')
+      throw new Error(`user msgs: ${JSON.stringify(userMsgs)}`);
+    if (aiMsgs.length !== 1 || aiMsgs[0] !== '안녕하세요')
+      throw new Error(`ai msgs: ${JSON.stringify(aiMsgs)}`);
+    await page.close();
+  });
+
+  // ─── 테스트 11: ToolResultCard collapsible (R-5-E) ────────────
+  await runTest('ToolResultCard — collapsible 토글 (R-5-E)', async () => {
+    const page = await setupPage(browser);
+    await page.evaluate(() => {
+      document.body.innerHTML = '';
+      const card = new (window).__agent.ToolResultCard(
+        { id: 'tc-1', name: 'insertText', args: { text: 'hi' } },
+        { toolCallId: 'tc-1', result: { ok: true } },
+      );
+      card.mount(document.body);
+    });
+
+    let open = await page.$eval('details.agent-tool-card', (el) => el.open);
+    if (open !== false) throw new Error(`default not closed: ${open}`);
+
+    const name = await page.$eval(
+      '.agent-tool-card__name', (el) => el.textContent,
+    );
+    const args = await page.$eval(
+      '.agent-tool-card__args', (el) => el.textContent,
+    );
+    if (name !== 'insertText') throw new Error(`name: ${name}`);
+    if (!args?.includes('hi')) throw new Error(`args: ${args}`);
+
+    await page.click('.agent-tool-card__summary');
+    open = await page.$eval('details.agent-tool-card', (el) => el.open);
+    if (open !== true) throw new Error(`after click not open: ${open}`);
+
+    const body = await page.$eval(
+      '.agent-tool-card__body', (el) => el.textContent,
+    );
+    if (!body?.includes('"ok"') || !body?.includes('true'))
+      throw new Error(`body: ${body}`);
     await page.close();
   });
 
