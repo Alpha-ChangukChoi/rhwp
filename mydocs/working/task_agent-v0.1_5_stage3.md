@@ -229,7 +229,29 @@ R-011 *누적 환경 점검* 의 보강 사항으로 본 task 종료 시 `_NEXT_
 - [x] R-5-G 메뉴바 hook 검증 + R-5-H 기본 닫힘 검증
 - [x] R-009 응답시간 36ms (5000±2000 허용 범위)
 - [x] 본가 무수정 정책: main.ts 1~2줄 단독 commit + 다른 영역 무수정
-- [ ] **(deferred)** `vite build` + PWA SW (R-5-F) — pkg/ WASM 환경 보강 후 후속
+- [x] **(deferred 해소, 환경 정비 task 후속)** `vite build` 통과 + 5번째 e2e skip 해제 + 1번째 idempotent 검증 — `local/env-pkg-wasm` 브랜치에서 후속 처리
+
+### 12. 환경 정비 task 후속 검증 (`local/env-pkg-wasm`, 2026-05-01)
+
+본 #5 task close 후 *환경 정비 micro task* 진행 → D-5-6 (`pkg/` WASM 부재) 해소 + 본 보고서 §11 의 deferred 항목 모두 활성화.
+
+**환경 정비 결과**:
+
+| 항목 | 결과 |
+|------|------|
+| Docker WASM 빌드 (`docker compose --env-file .env.docker run --rm wasm`) | ✅ 성공 (2분 47초) |
+| `.env.docker` 파일 작성 | UID=501 (호스트 사용자), GID=1000 (Linux 컨테이너 시스템 그룹 충돌 회피) |
+| `pkg/` 산출 | rhwp.js (228KB), rhwp_bg.wasm (4.1MB), 호스트 owner 정합 |
+| TypeScript strict (rhwp-studio 전체) | ✅ 0 에러 (기존 `@wasm/rhwp.js` 에러 2건 해소) |
+| `npm run build` (production) | ✅ 통과 (689KB main + 4.1MB WASM + PWA SW) |
+| 통합 e2e 5건 | ✅ **5 pass** (이전 4 pass + 1 skip → 1 skip 해제 + 실 검증) |
+| 1번째 e2e (idempotent 검증) | main.ts 자동 mount + 수동 mount 동시 호출 시 *정확히 1개 menu item* 검증으로 갱신 |
+
+**부수 발견**: macOS staff GID (20) 가 Linux 컨테이너의 *시스템 그룹* 과 충돌 → Dockerfile 의 `chown -R builder:builder` fail. GID=1000 으로 변경 회피. 산출물 user 소유권은 UID=501 (호스트) 로 일치 → 호스트 read/write 정상.
+
+**남은 deferred** (별도 task 후보):
+- PWA SW 점검 (R-5-F) — `vite preview` 띄운 상태에서 *SW 가 mock fetch 인터셉트 영향* 실측. 본 e2e 인프라 (vite dev) 외 별도 검증 필요. agent-v0.1 마일스톤 종결 회고 시점.
+- 실 OpenAI 채팅 (Stage 4 옵셔널) — #6 의존 (agent-server ChatController 등록).
 
 ## 12. 다음 단계
 
