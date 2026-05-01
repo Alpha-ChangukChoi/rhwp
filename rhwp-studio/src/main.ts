@@ -25,6 +25,7 @@ import { CellSelectionRenderer } from '@/engine/cell-selection-renderer';
 import { TableObjectRenderer } from '@/engine/table-object-renderer';
 import { TableResizeRenderer } from '@/engine/table-resize-renderer';
 import { Ruler } from '@/view/ruler';
+import { mountAgentSidebar } from '@/agent';
 
 const wasm = new WasmBridge();
 const eventBus = new EventBus();
@@ -708,3 +709,5 @@ window.addEventListener('message', async (e) => {
     reply(undefined, err.message || String(err));
   }
 });
+
+mountAgentSidebar();
