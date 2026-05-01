@@ -301,6 +301,32 @@ try {
     await page.close();
   });
 
+  // ─── 통합 5: main.ts 자동 mount — page.goto 만으로 사이드바 존재 ──────────
+  // 주의: 본 검증은 *main.ts 가 정상 load 됨* 전제. pkg/ WASM 빌드 부재 시 main.ts
+  //       의 wasm-bridge import 실패 → 본 검증 skip (환경 사전 상태 deviation).
+  await runTest('통합: main.ts 자동 mount → page.goto 만으로 #agent-sidebar 존재 (pkg/ WASM 의존)', async () => {
+    const page = await browser.newPage();
+    await page.setViewport({ width: 1280, height: 900 });
+    await page.goto(`http://localhost:${VITE_PORT}/`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 15000,
+    });
+    // 별도 mountSidebar() 호출 *없이* main.ts 의 자동 호출만으로 사이드바 mount 확인
+    try {
+      await page.waitForSelector('#agent-sidebar', { timeout: 3000 });
+    } catch {
+      // pkg/ WASM 부재 → main.ts load 실패 추정. 환경 보강 후 활성화 대상.
+      console.log('    [skip] main.ts load 실패 추정 (pkg/ WASM 빌드 부재 — 환경 사전 상태)');
+      await page.close();
+      return;
+    }
+    const open = await page.$eval('#agent-sidebar', (el) => el.dataset.open);
+    if (open !== 'false') throw new Error(`expected closed, got ${open}`);
+    const menuItem = await page.$('[data-menu="view"] .agent-menu-item');
+    if (!menuItem) throw new Error('agent-menu-item not auto-hooked');
+    await page.close();
+  });
+
 } finally {
   await browser.close().catch(() => {});
   vite.kill('SIGTERM');

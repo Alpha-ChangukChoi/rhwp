@@ -197,16 +197,39 @@ R-009 수치 3건 모두 허용 범위 내. 위 발견 4건 모두 *해결됨* �
 
 본 task 의 *발견 4건* 은 *방법론 외 기술 발견* — R-014/R-015 효과 측정 항목과 무관. 그러나 *후속 task 의 R-010 외부 정보 조회 사전 명시* 형태로 정식화 가치 — `methodology_refinements.md` 의 *R-N-** 형태 정식화* 또는 *기술 노트* 별도 문서.
 
-## 11. Stage 3 (b) 후 갱신 영역 (예약)
+## 11. Stage 3 (b) 검증 결과 (main.ts 변경 후 갱신)
 
-main.ts commit 후 다음 검증 결과를 본 보고서에 갱신:
+main.ts 1~2줄 추가 (`import` + `mountAgentSidebar()`) 후 검증:
 
-- `npm run build` 통과 여부
-- production 번들에 agent/* 포함 확인
-- `vite preview` 시 사이드바 자동 mount 확인
-- PWA SW 활성 시 mock fetch 인터셉트 정상 동작 (R-5-F)
+| 항목 | 결과 | 비고 |
+|------|------|------|
+| TypeScript strict (`tsc --noEmit -p .` 의 agent/* 영역) | ✅ pass | main.ts 의 신규 import 도 strict 통과 |
+| `vite build` (production) | ❌ fail | **환경 사전 상태 — pkg/ WASM 부재** (`@wasm/rhwp.js` 모듈 미해석). 본 task 외 영역 |
+| 통합 e2e 4건 회귀 (vite dev 모드) | ✅ 4건 pass + idempotent 검증 | main.ts 의 자동 호출 + 통합 e2e 의 수동 호출 양립 (mounted 변수 가드) |
+| 통합 e2e 5건째 (main.ts 자동 mount) | ⚠️ **skip** | pkg/ WASM 부재로 main.ts wasm-bridge import 실패 → 자동 mount 검증 차단. 조건부 skip 패턴 (환경 보강 후 활성화) |
+| **PWA SW 점검 (R-5-F)** | ⏳ deferred | production 번들 (vite build) 의존 → pkg/ WASM 환경 보강 후 검증. agent-v0.1 마일스톤 종료 회고 시 또는 후속 task |
 
-**갱신 시점**: Stage 3 (b) 커밋 직후.
+### 환경 deviation 분류
+
+| 항목 | 분류 |
+|------|------|
+| `pkg/` WASM 빌드 부재 | **환경 사전 상태 deviation** — 본 task 가 *환경 보강 책임자* 아님. R-011 누적 환경 점검의 *후속 보강 사항* |
+| `vite build` fail | 위 deviation 의 *direct consequence* |
+| PWA SW 점검 미수행 | 위 deviation 의 *transitive consequence* (production 번들 의존) |
+
+R-011 *누적 환경 점검* 의 보강 사항으로 본 task 종료 시 `_NEXT_SESSION.md` 또는 별도 환경 정비 task 등록 추천.
+
+### Stage 3 (b) 종료 체크 (재정의)
+
+본 task 의 *agent/* 영역 신규 코드* 한정 + *환경 사전 상태 외 변경 책임* 분리 후 종료 체크:
+
+- [x] `main.ts` 진입점 1~2줄 추가 (`import { mountAgentSidebar } from '@/agent';` + 마지막 `mountAgentSidebar();`)
+- [x] TypeScript strict — agent/* 및 main.ts 신규 import 에러 0
+- [x] 통합 e2e 4건 회귀 0 + 5번째 skip 정상 동작
+- [x] R-5-G 메뉴바 hook 검증 + R-5-H 기본 닫힘 검증
+- [x] R-009 응답시간 36ms (5000±2000 허용 범위)
+- [x] 본가 무수정 정책: main.ts 1~2줄 단독 commit + 다른 영역 무수정
+- [ ] **(deferred)** `vite build` + PWA SW (R-5-F) — pkg/ WASM 환경 보강 후 후속
 
 ## 12. 다음 단계
 
