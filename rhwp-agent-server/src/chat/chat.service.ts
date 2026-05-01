@@ -25,6 +25,12 @@ export class ChatService {
     this.model = config.getOrThrow<string>('OPENAI_MODEL');
   }
 
+  // R-6-G: createSession 노출 — SessionService.create() wrapper.
+  // 후속 hook (system prompt 자동 설정 등) 의 자연 진입점.
+  createSession(): SessionId {
+    return this.sessions.create();
+  }
+
   async complete(messages: ChatMessage[]): Promise<ChatMessage> {
     const startedAt = Date.now();
     try {
